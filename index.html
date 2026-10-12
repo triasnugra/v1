@@ -42,7 +42,7 @@ dialog{width:min(720px,96vw);max-height:92vh;border:0;border-radius:24px;padding
 dialog::backdrop{background:rgba(32,33,36,.55)}
 .x{float:right;background:var(--s);border:0;border-radius:50%;width:34px;height:34px;font-size:20px;cursor:pointer;color:var(--tx)}
 .tf{margin:8px 0}.tf button{border:1px solid var(--ln);background:var(--bg);color:var(--tx);border-radius:99px;padding:5px 14px;font:inherit;cursor:pointer;margin-right:6px}.tf button.on{background:var(--bl);border-color:var(--b);color:var(--b)}
-svg{display:block;border-radius:12px;background:var(--s)}svg text{font:10px "Google Sans",Roboto,system-ui,sans-serif}
+svg{display:block;border-radius:12px;background:var(--s)}svg text{font:10px "Google Sans",Roboto,system-ui,sans-serif;paint-order:stroke;stroke:var(--s);stroke-width:3px}
 li{margin:8px 0}
 :focus-visible{outline:2px solid var(--b);outline-offset:2px}
 footer{max-width:800px;margin:30px auto;padding:0 16px;color:var(--mut);font-size:12px}
@@ -50,7 +50,7 @@ footer{max-width:800px;margin:30px auto;padding:0 16px;color:var(--mut);font-siz
 </style></head><body>
 <header><h1 id="wm" aria-label="asgracrypto"></h1>
 <form id="sf"><input id="q" list="dl" placeholder="Cari koin, contoh: BTC atau SOL" autocomplete="off" enterkeyhint="search"><datalist id="dl"></datalist></form></header>
-<nav id="tabs"><button data-t="home" class="on">Ringkasan</button><button data-t="setup">Setup</button><button data-t="watch">Pantauan</button><button data-t="rule">Strategi</button></nav>
+<nav id="tabs"><button data-t="home" class="on">Ringkasan</button><button data-t="setup">Setup</button><button data-t="watch">Pantauan</button><button data-t="jr">Jurnal</button><button data-t="rule">Strategi</button></nav>
 <main>
 <div id="al"></div>
 <div class="bar"><button class="p" id="go">Pindai ulang</button><span id="st" class="m"></span></div><div id="pg"><i></i></div>
@@ -70,6 +70,11 @@ footer{max-width:800px;margin:30px auto;padding:0 16px;color:var(--mut);font-siz
 <section id="t-watch" hidden>
 <p class="m">Ketuk koin untuk melihat grafik dan rencana jika-maka.</p>
 <div class="sc"><table id="wt"></table></div>
+</section>
+
+<section id="t-jr" hidden>
+<h2>Jurnal otomatis</h2><div id="jst"></div><div class="sc"><table id="jt"></table></div>
+<h2>Backtest</h2><div id="bt" class="c m">Memuat</div>
 </section>
 
 <section id="t-rule" hidden>
@@ -112,16 +117,17 @@ $('#tabs').onclick=e=>{const b=e.target.closest('button');if(!b)return;[...$('#t
 function showAl(){const A=[...alertList(),...extra];$('#al').innerHTML=A.map(a=>`<div class="al ${a[0]}">${a[1]}<small>${a[2]||''}</small></div>`).join('')}
 
 function chart(r,tf){const k4=tf=='4h',B=k4?r.ch4:r.ch1,fr=k4?r.f4:r.f1,off=k4?r.off4:r.off1;if(!fr)return'<p class="m">Data kurang untuk timeframe ini.</p>';
- const W=640,Hh=250,n=B.length,bw=W/n,P=14,s=r.best&&r.best.tf===(k4?'4H':'1D')?r.best:null,Ls=[[fr.H,'range high','var(--mut)'],[fr.L,'range low','var(--mut)']];
+ const W=640,Hh=260,n=B.length,bw=W/n,P=14,s=r.best&&r.best.tf===(k4?'4H':'1D')?r.best:null,Ls=[[fr.H,'range high','var(--mut)'],[fr.M,'tengah','var(--mut)'],[fr.L,'range low','var(--mut)']];
  if(fr.mon)Ls.push([fr.mon.h,'Monday high','#F9AB00'],[fr.mon.l,'Monday low','#F9AB00']);
  if(s){Ls.push([s.entry,'entry','#4285F4'],[s.sl,'SL','#EA4335']);s.tg.forEach(t=>Ls.push([t.v,t.l.split(' ')[0],'#34A853']))}
  const vs=[...B.map(q=>q.h),...B.map(q=>q.l),...Ls.map(a=>a[0])],mx=Math.max(...vs),mn=Math.min(...vs),y=v=>+(P+(mx-v)/(mx-mn)*(Hh-2*P)).toFixed(1);
  let o=`<svg viewBox="0 0 ${W} ${Hh}" width="100%" role="img" aria-label="Grafik ${r.s} ${fr.tf}">`;
- o+=`<rect x="0" y="${y(fr.H)}" width="${W}" height="${Math.max(2,y(fr.H-fr.bd)-y(fr.H))}" fill="#EA4335" opacity=".16"/><rect x="0" y="${y(fr.L+fr.bd)}" width="${W}" height="${Math.max(2,y(fr.L)-y(fr.L+fr.bd))}" fill="#34A853" opacity=".16"/>`;
- o+=`<line x1="0" x2="${W}" y1="${y(fr.M)}" y2="${y(fr.M)}" stroke="var(--mut)" stroke-dasharray="2 4"/>`;
+ o+=`<rect x="0" y="${y(fr.H)}" width="${W}" height="${Math.max(6,y(fr.H-fr.bd)-y(fr.H))}" fill="#EA4335" opacity=".2"/><rect x="0" y="${Math.min(y(fr.L+fr.bd),y(fr.L)-6)}" width="${W}" height="${Math.max(6,y(fr.L)-y(fr.L+fr.bd))}" fill="#34A853" opacity=".2"/>`;
  B.forEach((q,i)=>{const x=(i*bw+bw/2).toFixed(1),c=q.c>=q.o?'#34A853':'#EA4335';o+=`<line x1="${x}" x2="${x}" y1="${y(q.h)}" y2="${y(q.l)}" stroke="${c}"/><rect x="${(x-bw*.35).toFixed(1)}" y="${y(Math.max(q.o,q.c))}" width="${(bw*.7).toFixed(1)}" height="${Math.max(1,Math.abs(y(q.o)-y(q.c)))}" fill="${c}"/>`});
  if(fr.tl){const T=fr.tl,a=Math.max(T.a,off),v=i=>T.av+T.sl*(i-T.a);o+=`<line x1="${((a-off+.5)*bw).toFixed(1)}" y1="${y(v(a))}" x2="${((T.e-off+.5)*bw).toFixed(1)}" y2="${y(v(T.e))}" stroke="#F9AB00" stroke-width="2"/>`}
- for(const[v,t,c]of Ls)o+=`<line x1="0" x2="${W}" y1="${y(v)}" y2="${y(v)}" stroke="${c}" stroke-dasharray="5 3" opacity=".8"/><text x="4" y="${y(v)-3}" fill="${c}">${t} ${f(v)}</text>`;
+ // label disusun bertingkat agar tidak saling menimpa (mis. entry sama dengan Monday low)
+ const lab=Ls.map(l=>({y:y(l[0]),t:l[1]+' '+f(l[0]),c:l[2]})).sort((a,b)=>a.y-b.y);let last=-99;
+ for(const l of lab){const ty=Math.max(l.y-3,last+11);last=ty;o+=`<line x1="0" x2="${W}" y1="${l.y}" y2="${l.y}" stroke="${l.c}" stroke-dasharray="5 3" opacity=".8"/><text x="4" y="${ty}" fill="${l.c}">${l.t}</text>`}
  return o+'</svg>'}
 
 function card(r){const s=r.best,cap=+$('#cap').value||0,rs=cap*(+$('#rk').value||0)/100,q=rs/s.risk,nt=q*s.entry,lev=cap?nt/cap:0;
@@ -137,7 +143,7 @@ function renderSetups(){const L=all.filter(r=>r.best).filter(r=>flt=='all'||(flt
  $('#top3').innerHTML=all.filter(r=>r.best).sort((a,b)=>b.best.sc-a.best.sc||a.best.dist-b.best.dist).slice(0,3).map(card).join('')||'<div class="c m">Belum ada setup. Tunggu pemicu di tepi range.</div>'}
 
 function renderHome(){const b=btc,fr=b.f4||b.f1;
- const msg=fr.mid?'BTC di tengah range. Diam di BTC dan cari setup altcoin yang punya pemicu.':b.best?'BTC punya setup. Buka rencananya.':fr.pos<.2?'BTC dekat low range. Tunggu sweep lalu reclaim.':fr.pos>.8?'BTC dekat high range. Tunggu sweep atas, atau breakout dan retest.':'BTC belum memberi pemicu.';
+ const msg=fr.trend?'BTC sedang trending dan belum membentuk range. Tunggu konsolidasi atau pemicu Monday.':fr.mid?'BTC di tengah range. Diam di BTC dan cari setup altcoin yang punya pemicu.':b.best?'BTC punya setup. Buka rencananya.':fr.pos<.2?'BTC dekat low range. Tunggu sweep lalu reclaim.':fr.pos>.8?'BTC dekat high range. Tunggu sweep atas, atau breakout dan retest.':'BTC belum memberi pemicu.';
  $('#btcc').className='c';$('#btcc').dataset.s='BTC';
  $('#btcc').innerHTML=`<div class="g4"><div><span>Harga BTC</span>${f(b.px)}</div><div><span>Range ${fr.tf}</span>${f(fr.L)} sampai ${f(fr.H)}</div><div><span>Posisi di range</span>${Math.round(fr.pos*100)}%</div><div><span>Struktur harian</span>${SD[b.bias+1]}</div></div><div>${msg}</div>${fr.mon?`<div class="m">Monday Range: ${f(fr.mon.l)} sampai ${f(fr.mon.h)}${fr.mon.done?'':' (belum selesai)'}</div>`:''}<div class="m">Ketuk untuk grafik dan rencana.</div>`}
 
@@ -159,7 +165,7 @@ const scen=r=>{const fr=r.f4||r.f1,A=fr.A,tf=fr.tf;return[
  ['b','Breakout, retest, lalu long',`Jika 2 close ${tf} atau lebih di atas ${f(fr.H)} dan harga me-retest ${f(fr.H)} lalu bertahan, long di retest dengan SL di bawah retest. Tanpa itu, tidak ada trade.`]]};
 
 function open(r){cur=r;const s=r.best;
- $('#dg').innerHTML=`<button class="x" aria-label="Tutup" onclick="document.querySelector('#dg').close()">×</button><h3>${r.s} <span class="ch">${r.st}</span></h3><div class="m">Harga ${f(r.px)}, struktur harian ${SD[r.bias+1]}</div>
+ $('#dg').innerHTML=`<button class="x" aria-label="Tutup" onclick="document.querySelector('#dg').close()">×</button><h3>${r.s} <span class="ch">${r.st}</span></h3><div class="m">Harga ${f(r.px)}, struktur harian ${SD[r.bias+1]}</div>${(r.f4||r.f1).trend?'<div class="m">Tren kuat: belum ada range konsolidasi. Garis range hanya menunjukkan high dan low terdekat.</div>':''}
 <div class="tf" id="tf"><button data-tf="4h" class="${tfv=='4h'?'on':''}">4H</button><button data-tf="1d" class="${tfv=='1d'?'on':''}">1D</button></div><div id="chw">${chart(r,tfv)}</div>
 <div class="m" style="margin-top:6px">Kotak hijau demand, kotak merah supply, garis putus-putus tengah range${(r.f4||{}).mon?', kuning Monday Range':''}.</div>
 ${s?`<h2>Setup saat ini</h2>${card(r)}${r.setups.length>1?`<div class="m">Setup lain: ${r.setups.slice(1).map(x=>`${x.side==1?'long':'short'} ${x.tf} (${x.why})`).join('; ')}</div>`:''}`:''}
@@ -189,5 +195,18 @@ async function scan(){const b=$('#go');b.disabled=true;all=[];extra=[];$('#pg i'
   $('#st').textContent=`Selesai: ${all.filter(r=>r.best).length} koin punya setup, ${all.length} koin dipantau.`;
  }catch(e){$('#st').textContent='Semua server Binance gagal dijangkau ('+(e&&e.name==='TimeoutError'?'timeout':e&&e.message)+'). Coba ganti jaringan atau VPN.'}
  $('#pg i').style.width='100%';b.disabled=false}
-$('#go').onclick=scan;showAl();scan();
+async function jr(){let J=[],Bk=null;
+ try{J=await (await fetch('data/journal.json')).json()}catch(e){}
+ try{Bk=await (await fetch('data/backtest.json')).json()}catch(e){}
+ const net=r=>r.R==null?null:r.R-(r.hasil==='tidak terisi'?0:.0012*r.entry/r.risk),tp2=r=>r.tg.filter(t=>!t.l.startsWith('TP3')).at(-1).v;
+ const cl=J.filter(r=>['TP','SL','kedaluwarsa'].includes(r.hasil)),W=cl.filter(r=>r.hasil==='TP').length,Lz=cl.filter(r=>r.hasil==='SL').length,Rs=cl.map(net),sm=Rs.reduce((a,b)=>a+b,0);
+ $('#jst').innerHTML=J.length?`<div class="c"><div class="g4"><div><span>Sinyal tercatat</span>${J.length}</div><div><span>Win rate (TP lawan SL)</span>${W+Lz?Math.round(W/(W+Lz)*100)+'%':'-'}</div><div><span>Rata-rata R, setelah biaya</span>${Rs.length?(sm/Rs.length).toFixed(2):'-'}</div><div><span>Total R</span>${Rs.length?sm.toFixed(1):'-'}</div></div>${cl.length<30?`<div class="m">Baru ${cl.length} sinyal selesai. Butuh minimal 30 sebelum angka ini bermakna.</div>`:''}</div>`:'<div class="c m">Jurnal belum ada. Jalankan workflow asgracrypto di GitHub Actions, lalu muat ulang halaman.</div>';
+ $('#jt').innerHTML=J.length?'<tr><th>Waktu</th><th>Koin</th><th>Pola</th><th>Arah</th><th>Entry</th><th>SL</th><th>Target</th><th>Hasil</th><th>R</th></tr>'+[...J].reverse().slice(0,40).map(r=>`<tr><td>${r.waktu}</td><td>${r.sym}</td><td>${r.tf} ${r.kind}</td><td>${r.side==1?'Long':'Short'}</td><td>${f(r.entry)}</td><td>${f(r.sl)}</td><td>${f(tp2(r))}</td><td>${r.hasil}</td><td>${r.R==null?'':r.R}</td></tr>`).join(''):'';
+ if(!Bk){$('#bt').textContent='Backtest belum dijalankan. Jalankan workflow asgracrypto dengan opsi backtest, lalu muat ulang.';return}
+ const T=Bk.total,row=(k,a)=>`<tr><td>${k}</td><td>${a.terisi}</td><td>${a.winRate==null?'-':a.winRate+'%'}</td><td>${a.avgR??'-'}</td><td>${a.totalR}</td></tr>`;
+ $('#bt').className='c';$('#bt').innerHTML=`<div class="g4"><div><span>Sinyal terisi</span>${T.terisi}</div><div><span>Win rate</span>${T.winRate==null?'-':T.winRate+'%'}</div><div><span>Rata-rata R, setelah biaya</span>${T.avgR??'-'}</div><div><span>Total R</span>${T.totalR}</div></div>
+<div class="m">${Bk.koin} koin, ${Bk.periodeHari} hari terakhir, dibuat ${Bk.dibuat}. Paruh awal: rata-rata ${Bk.stabil.awal.avgR??'-'}R, paruh akhir: ${Bk.stabil.akhir.avgR??'-'}R.</div>
+<div class="sc"><table><tr><th>Pola</th><th>Terisi</th><th>Win rate</th><th>Rata-rata R</th><th>Total R</th></tr>${Object.entries(Bk.perJenis).sort((a,b)=>b[1].terisi-a[1].terisi).map(([k,a])=>row(k,a)).join('')}</table></div>
+<ul class="m" style="padding-left:18px">${Bk.catatan.map(x=>`<li>${x}</li>`).join('')}</ul>`}
+$('#go').onclick=scan;showAl();scan();jr();
 </script></body></html>

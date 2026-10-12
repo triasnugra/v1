@@ -6,10 +6,11 @@ export async function bj(p){let e;for(let t=0;t<HOSTS.length;t++){const h=HOSTS[
 export const kl=async(s,iv,lim)=>(await bj(`klines?symbol=${s}&interval=${iv}&limit=${lim}`)).map(a=>({t:a[0],o:+a[1],h:+a[2],l:+a[3],c:+a[4],v:+a[5]}));
 export const NOT=/^(USDC|FDUSD|TUSD|USDP|DAI|BUSD|EUR|AEUR|USD1|XUSD|PAXG|USDE|PYUSD|U|USDS|USDD|RLUSD|BFUSD|USDG)$/;
 export const fmt=v=>v>=100?v.toFixed(1):v>=1?v.toFixed(3):v.toPrecision(3);
-// Tanggal keputusan FOMC 2026 (hari ke-2). Verifikasi di federalreserve.gov
-const FOMC=['2026-01-28','2026-03-18','2026-04-29','2026-06-17','2026-07-29','2026-09-16','2026-10-28','2026-12-09'];
+// Hari keputusan FOMC (hari ke-2 rapat). Diverifikasi di federalreserve.gov/monetarypolicy/fomccalendars.htm (pembaruan halaman 7 Okt 2026). 2027 masih tentatif.
+// Hari keputusan FOMC (hari ke-2 rapat). Diverifikasi di federalreserve.gov/monetarypolicy/fomccalendars.htm pada 8 Okt 2026 (2027 masih tentatif).
+export const FOMC=['2026-01-28','2026-03-18','2026-04-29','2026-06-17','2026-07-29','2026-09-16','2026-10-28','2026-12-09','2027-01-27','2027-03-17','2027-04-28','2027-06-09','2027-07-28','2027-09-15','2027-10-27','2027-12-08'];
 const HOL=['12-24','12-25','12-26','12-31','01-01'];
-const CF={f4:{tf:'4H',look:126,skip:6,rec:6,k:3,bo:12,mon:1,minRg:.04},d1:{tf:'1D',look:120,skip:5,rec:5,k:3,bo:10,mon:0,minRg:.08}};
+const CF={f4:{tf:'4H',look:126,looks:[126,84,42],maxAtr:14,skip:6,rec:6,k:3,bo:12,mon:1,minRg:.025},d1:{tf:'1D',look:120,skip:5,rec:5,k:3,bo:10,mon:0,minRg:.08}};
 const atr=(b,n=14)=>b.slice(-n).reduce((s,q,i,a)=>s+Math.max(q.h-q.l,i?Math.abs(q.h-a[i-1].c):0,i?Math.abs(q.l-a[i-1].c):0),0)/n;
 const piv=(b,k,from,to,key,up)=>{const r=[];for(let i=Math.max(k,from);i<to;i++){let ok=true;for(let j=i-k;j<=i+k&&ok;j++)if(j!==i&&b[j]&&(up?b[j][key]>b[i][key]:b[j][key]<b[i][key]))ok=false;if(ok)r.push(i)}return r};
 // struktur harian tanpa indikator: HH+HL = naik, LH+LL = turun
@@ -18,9 +19,12 @@ function bias(b){const n=b.length,H=piv(b,3,n-120,n-3,'h',1),L=piv(b,3,n-120,n-3
 
 function frame(b0,px,C,bs){
  const b=b0.slice(0,-1),n=b.length;if(n<C.look+10)return null;
- const{look,skip,rec,k,bo}=C,rb=b.slice(n-look,n-skip),H=Math.max(...rb.map(q=>q.h)),L=Math.min(...rb.map(q=>q.l)),rg=H-L;
+ const{skip,rec,k,bo}=C,A=atr(b);let look=C.look,trend=false;
+ // range taktis harus konsolidasi: pilih jendela terpanjang yang lebarnya maksimal maxAtr kali ATR; kalau tidak ada, harga sedang trending
+ if(C.looks){const ok=C.looks.find(x=>{const w=b.slice(n-x,n-skip);return Math.max(...w.map(q=>q.h))-Math.min(...w.map(q=>q.l))<=C.maxAtr*A});look=ok||C.looks.at(-1);trend=!ok}
+ const rb=b.slice(n-look,n-skip),H=Math.max(...rb.map(q=>q.h)),L=Math.min(...rb.map(q=>q.l)),rg=H-L;
  if(!(rg>0))return null;
- const M=(H+L)/2,A=atr(b),bd=Math.min(.5*A,rg/4),pos=(px-L)/rg,mid=pos>.3&&pos<.7,flat=rg/L<C.minRg;
+ const M=(H+L)/2,bd=Math.max(Math.min(.5*A,rg/4),.003*px),pos=(px-L)/rg,mid=pos>.3&&pos<.7,flat=rg/L<C.minRg;
  const R=b.slice(n-rec),last=b[n-1],lowW=Math.min(...R.map(q=>q.l)),highW=Math.max(...R.map(q=>q.h));
  const sUp=lowW<L&&px>L&&last.c>L,sDn=highW>H&&px<H&&last.c<H;
  const PH=piv(b,k,n-look,n-skip,'h',1),PL=piv(b,k,n-look,n-skip,'l',0);
@@ -58,10 +62,10 @@ function frame(b0,px,C,bs){
   if(!sUp&&bs==1&&tL>=2&&px>=L&&px<=L+1.5*bd)add('zone',1,'Retest zona demand kuat (2+ sentuhan, searah struktur)',L+bd,L,1);
   if(!sDn&&bs==-1&&tH>=2&&px<=H&&px>=H-1.5*bd)add('zone',-1,'Retest zona supply kuat (2+ sentuhan, searah struktur)',H-bd,H,1)}
  // di tengah range hanya pemicu sweep yang dipertahankan
- const keep=S.filter(s=>!(mid&&['bo','zone','wolf'].includes(s.kind)));
+ const keep=S.filter(s=>!(mid&&['bo','zone','wolf'].includes(s.kind))&&!(trend&&s.kind!=='mon'));
  const tags=[];if(sUp)tags.push(tL>=2?'Three Tap':'Sweep bawah');if(sDn)tags.push(tH>=2?'Three Top':'Sweep atas');if(ddUp||ddDn)tags.push('Double Deviation');
  if(mUp)tags.push('Sweep Monday Low');if(mDn)tags.push('Sweep Monday High');if(wUp||wDn)tags.push('Wolf');if(boUp||boDn)tags.push('Breakout retest');
- return{tf:C.tf,H,L,M,A,bd,pos,mid,flat,mon,tags,S:keep,tl:wDn?TH:wUp?TL:null}}
+ return{tf:C.tf,H,L,M,A,bd,pos,mid,flat,trend,look,mon,tags,S:keep,tl:wDn?TH:wUp?TL:null}}
 
 function confirm(sd,entry,sl,b){
  const g=[];for(const q of b){const k=Math.floor(q.t/432e5),x=g.at(-1);if(x&&x.k===k){x.c=q.c;x.n++}else g.push({k,c:q.c,n:1})}
@@ -94,14 +98,26 @@ export function analyze(sym,d,f,ctx={}){
   p.w=[];if(p.type.startsWith('spot'))p.w.push('SL lebar: hanya untuk spot tanpa leverage');
   if(p.side==1&&ctx.btcBias==-1)p.w.push('Melawan struktur turun BTC');if(ctx.qv<2e7)p.w.push('Volume 24 jam rendah, risiko slip');setups.push(p)}
  setups.sort((a,b)=>b.sc-a.sc||a.dist-b.dist);
- const fr=f4||f1,st=setups.length?'Setup aktif':fr.flat?'Harga datar':fr.mid?'Tengah range: tanpa trade':fr.pos<.2?'Dekat low: tunggu sweep dan reclaim':fr.pos>.8?'Dekat high: tunggu sweep atau breakout dan retest':'Belum ada pemicu';
+ const fr=f4||f1,st=setups.length?'Setup aktif':fr.flat?'Harga datar':fr.trend?'Tren kuat: belum membentuk range':fr.mid?'Tengah range: tanpa trade':fr.pos<.2?'Dekat low: tunggu sweep dan reclaim':fr.pos>.8?'Dekat high: tunggu sweep atau breakout dan retest':'Belum ada pemicu';
  return{s:sym,px,qv:ctx.qv||0,bias:bs,f4,f1,htf,setups,best:setups[0]||null,st,ret30:px/dd[dd.length-30].c-1,
   ch4:f.slice(-120),off4:f.length-120,ch1:d.slice(-90),off1:d.length-90}}
 
-export function alertList(){const d=new Date(),iso=d.toISOString().slice(0,10),md=iso.slice(5),dw=d.getUTCDay(),tm=new Date(+d+864e5),A=[];
- if(FOMC.includes(iso)||FOMC.includes(tm.toISOString().slice(0,10)))A.push(['y','FOMC hari ini atau besok. Eliz menganggap berita sebagai noise: tetap tunggu pemicu dan pakai SL ketat.','Verifikasi tanggal di federalreserve.gov']);
+export function alertList(fomc=FOMC){const d=new Date(),iso=d.toISOString().slice(0,10),md=iso.slice(5),dw=d.getUTCDay(),tm=new Date(+d+864e5),A=[];
+ if(fomc.includes(iso)||fomc.includes(tm.toISOString().slice(0,10)))A.push(['y','FOMC hari ini atau besok. Eliz menganggap berita sebagai noise: tetap tunggu pemicu dan pakai SL ketat.','Tanggal sesuai kalender resmi Fed (diverifikasi 8 Okt 2026)']);
  if(tm.getUTCMonth()!=d.getUTCMonth())A.push(['y','Hari terakhir bulan. Penutupan bulanan 00:00 UTC.','']);
  if(dw==0)A.push(['y','Menjelang penutupan weekly (Senin 00:00 UTC).','']);
  if(HOL.includes(md))A.push(['r','Libur panjang, volume tipis. Banyak bot dan flash dump.','']);
  if(dw==1)A.push(['y','Hari Senin: tunggu Monday Range terbentuk dan close Senin sebelum mencari pemicu baru.','']);
  return A}
+
+// Simulasi hasil sinyal pada candle 4H setelah sinyal: entry limit terisi bila harga menyentuh, lalu SL atau target akhir mana lebih dulu.
+// Candle tempat entry terisi tidak dipakai untuk menguji SL/TP, dan bila SL dan TP kena di candle yang sama dihitung SL (konservatif).
+export function sim(s,bars,maxBars=60){
+ const sd=s.side,P=s.tg.filter(t=>!t.l.startsWith('TP3')),tp=P.at(-1).v,N=Math.min(bars.length,maxBars);let fill=-1;
+ for(let i=0;i<N;i++){const q=bars[i];
+  if(fill<0){if(sd==1?q.l<=s.entry:q.h>=s.entry)fill=i;continue}
+  if(sd==1?q.l<=s.sl:q.h>=s.sl)return{r:'SL',R:-1,bars:i};
+  if(sd==1?q.h>=tp:q.l<=tp)return{r:'TP',R:Math.abs(tp-s.entry)/s.risk,bars:i}}
+ if(bars.length<maxBars)return{r:fill<0?'menunggu':'terbuka',R:null};
+ if(fill<0)return{r:'tidak terisi',R:0};
+ return{r:'kedaluwarsa',R:sd*(bars[maxBars-1].c-s.entry)/s.risk}}
